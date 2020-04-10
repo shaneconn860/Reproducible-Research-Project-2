@@ -1,0 +1,156 @@
+---
+title: "Analyzing the NOAA Storm Database to understand the greatest health and economic consequences of storms"
+output: html_document
+---
+
+## Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+## Data Processing
+
+The first course of action before the data is studied in earnest is to load the packages needed for this analysis, download the required csv file and then read that file in to R to begin processing.
+
+```{r}
+#Load packages required
+
+library(dplyr)
+library(ggplot2)
+
+```
+
+```{r, cache=TRUE}
+
+#Create directory first
+
+if (!file.exists("./data")) {
+        dir.create("./data")
+}
+
+#Set variables for download
+
+downloadURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+downloadFile <- "./data/storm.data.csv.bz2"
+
+#Download file 
+
+if (!file.exists(downloadFile)) {
+        download.file(downloadURL, downloadFile, method = "curl")
+        unzip(downloadFile, overwrite = T, exdir = "./data")
+}        
+
+stormData <- read.csv("./data/storm.data.csv", sep = ",", header = TRUE)
+```
+
+### 1. Across the United States, which types of events (EVTYPE) are most harmful with respect to population health?
+
+For events that are harmful to the population health, we need to take a look at injuries and fatalities to see which Event Type has the highest amount of each.
+
+- Injuries
+
+```{r, cache=TRUE}
+
+#INJURIES
+
+totalInjuries <- aggregate(INJURIES ~ EVTYPE, stormData, sum)
+
+#totalInjuries <- totalInjuries[order(-totalInjuries$INJURIES), ][1:15, ]
+totalInjuries <- arrange(totalInjuries, desc(INJURIES), EVTYPE) [1:15, ]
+totalInjuries$EVTYPE <- factor(totalInjuries$EVTYPE, levels = totalInjuries$EVTYPE)
+
+```
+
+- Fatalities
+
+```{r, cache=TRUE}
+
+#FATALITIES
+
+totalFatalities <- aggregate(FATALITIES ~ EVTYPE, stormData, sum)
+
+#totalFatalities <- totalFatalities[order(-totalFatalities$FATALITIES), ][1:15, ]
+totalFatalities <- arrange(totalFatalities, desc(FATALITIES), EVTYPE) [1:15, ]
+totalFatalities$EVTYPE <- factor(totalFatalities$EVTYPE, levels = totalFatalities$EVTYPE)
+
+```
+
+
+
+### 2. Across the United States, which types of events have the greatest economic consequences?
+
+Next we need to take a look at both property and crop damage.
+
+
+
+```{r, cache=TRUE}
+
+#Figures for crop and property need to be merged as there is a max of 3 plots per report
+
+stormData$PROPDMGNUM = 0
+stormData[stormData$PROPDMGEXP == "H", ]$PROPDMGNUM = stormData[stormData$PROPDMGEXP == "H", ]$PROPDMG * 10^2
+stormData[stormData$PROPDMGEXP == "K", ]$PROPDMGNUM = stormData[stormData$PROPDMGEXP == "K", ]$PROPDMG * 10^3
+stormData[stormData$PROPDMGEXP == "M", ]$PROPDMGNUM = stormData[stormData$PROPDMGEXP == "M", ]$PROPDMG * 10^6
+stormData[stormData$PROPDMGEXP == "B", ]$PROPDMGNUM = stormData[stormData$PROPDMGEXP == "B", ]$PROPDMG * 10^9
+
+stormData$CROPDMGNUM = 0
+stormData[stormData$CROPDMGEXP == "H", ]$CROPDMGNUM = stormData[stormData$CROPDMGEXP == "H", ]$CROPDMG * 10^2
+stormData[stormData$CROPDMGEXP == "K", ]$CROPDMGNUM = stormData[stormData$CROPDMGEXP == "K", ]$CROPDMG * 10^3
+stormData[stormData$CROPDMGEXP == "M", ]$CROPDMGNUM = stormData[stormData$CROPDMGEXP == "M", ]$CROPDMG * 10^6
+stormData[stormData$CROPDMGEXP == "B", ]$CROPDMGNUM = stormData[stormData$CROPDMGEXP == "B", ]$CROPDMG * 10^9
+
+economicImpact <- aggregate(PROPDMGNUM + CROPDMGNUM ~ EVTYPE, stormData, sum)
+
+names(economicImpact) = c("EVTYPE", "DAMAGE")
+
+economicImpact <- arrange(economicImpact, desc(economicImpact$DAMAGE), EVTYPE) [1:15, ]
+
+economicImpact$EVTYPE <- factor(economicImpact$EVTYPE, levels = economicImpact$EVTYPE)
+
+```
+
+## Results
+
+### Injuries
+
+```{r}
+ggplot(totalInjuries, aes(x = EVTYPE, y = INJURIES)) + 
+    geom_bar(stat = "identity", fill = "red") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+    xlab("Event Type") + ylab("Injuries") + ggtitle("Number of injuries per Top 15 event types")
+```
+
+
+
+The largest weather event to cause injuries are clearly Tornadoes, with over 91,000 in total. This is a significant number when you consider the next major event to cause injuries are wind caused by Thunderstorms with 6,957 in comparison. Other events with similar numbers to Thunderstorm Winds are Floods, Excessive Heat and Lightning.
+
+
+
+### Fatalities
+
+```{r}
+ggplot(totalFatalities, aes(x = EVTYPE, y = FATALITIES)) + 
+    geom_bar(stat = "identity", fill = "red") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+    xlab("Event Type") + ylab("Fatalities") + ggtitle("Number of fatalities per Top 15 event types")
+```
+
+
+
+The largest weather event to cause fatalities are Tornadoes (as we saw with injuries caused) with 5,633 in total. Tornadoes are out in front significantly with the second deadliest event in this case being Excessive Heat with 1,903 in total. Other major events to cause fatalities are Flash Floods, Heat and Lightning.
+
+
+
+### Property and Crop damage
+
+```{r}
+ggplot(economicImpact, aes(x = EVTYPE, y = DAMAGE)) + 
+        geom_bar(stat = "identity", fill = "green") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+        xlab("Event Type") + ylab("Damages in $") + ggtitle("Damages in $ per Top 15 event types")
+```
+
+
+
+The greatest economic damage is caused by Flooding. It represents almost double of what is caused Hurricanes and Typhoons, which are next on the list. Tornadoes and Storm Surges also feature heavily in terms of economic damage.
